@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/exec"
 )
 
 func main() {
@@ -17,4 +18,12 @@ func main() {
 
 func run() {
 	fmt.Printf("Running %v\n", os.Args[2:])
+
+	// ... Unpacking a slices
+	cmd := exec.Command(os.Args[2], os.Args[3:]...)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	cmd.Run()
 }
