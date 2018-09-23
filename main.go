@@ -2,8 +2,11 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"strconv"
 	"syscall"
 )
 
@@ -11,8 +14,8 @@ func main() {
 	switch os.Args[1] {
 	case "run":
 		run()
-	case "child":
-		child()
+	case "spawnChild":
+		spawnChild()
 	default:
 		panic("bad command")
 	}
@@ -22,7 +25,7 @@ func run() {
 	fmt.Printf("Running %v with PID %d\n", os.Args[2:], os.Getpid())
 
 	// ... Unpacking a slices
-	cmd := exec.Command("/proc/self/exe", append([]string{"child"}, os.Args[2:]...)...) // Execute oneself again but now with child argument
+	cmd := exec.Command("/proc/self/exe", append([]string{"spawnChild"}, os.Args[2:]...)...) // Execute oneself again but now with child argument
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -38,8 +41,11 @@ func run() {
 	cmd.Run()
 }
 
-func child() {
+func spawnChild() {
 	fmt.Printf("Running %v with PID %d\n", os.Args[2:], os.Getpid())
+
+	// execute cgroup configuration
+	configureControlGroups()
 
 	syscall.Sethostname([]byte("container"))
 	syscall.Chroot("/home/fabian/ContainersFromScratch/UbuntuRootFS/ubuntuIMG") // chroot in base image root
@@ -52,12 +58,26 @@ func child() {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
-	// Set OS specific attribute for command execution
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Cloneflags: syscall.CLONE_NEWUTS, /* Create the Process in a new Namespace */
-	}
-
 	cmd.Run()
 
-	syscall.Unmount("/proc", 0) // Unmount after we are finished
+	syscall.Unmount("/proc", 0) // Unmount proc after we are finished
+}
+
+func configureControlGroups() {
+	cgroupDir := "/sys/fs/cgroup"                                 // Path to cgroup folder
+	pidDir := filepath.Join(cgroupDir, "pids")                    // pid child fodler
+	err := os.Mkdir(filepath.Join(pidDir, "fabicontainer"), 0775) // specific pid conf folder for the "container"
+	if err != nil && !os.IsExist(err) {
+		panic(err)
+	}
+
+	must(ioutil.WriteFile(filepath.Join(pidDir, "fabicontainer/pids.max"), []byte("20"), 0700))                          // max number of processes inside the container
+	must(ioutil.WriteFile(filepath.Join(pidDir, "fabicontainer/notify_on_release"), []byte("1"), 0700))                  // Removes cgroup after "container" quits
+	must(ioutil.WriteFile(filepath.Join(pidDir, "fabicontainer/cgroup.procs"), []byte(strconv.Itoa(os.Getpid())), 0700)) // write PID of parent and child process to cgroup.procs of the "container"
+}
+
+func must(err error) {
+	if err != nil {
+		panic(err)
+	}
 }
