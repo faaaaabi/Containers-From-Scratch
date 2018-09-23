@@ -39,8 +39,10 @@ func child() {
 	fmt.Printf("Running %v with PID %d\n", os.Args[2:], os.Getpid())
 
 	syscall.Sethostname([]byte("container"))
+	syscall.Chroot("/home/fabian/ContainersFromScratch/UbuntuRootFS/ubuntuIMG") // chroot in base image root
+	syscall.Chdir("/")                                                          // Set where you end up after chroot
 
-	// ... Unpacking a slices
+	// ... Unpacking a slice
 	cmd := exec.Command(os.Args[2], os.Args[3:]...)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
